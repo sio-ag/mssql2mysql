@@ -2,18 +2,18 @@
 /*
  * SOURCE: MS SQL
  */
-define('MSSQL_HOST','mssql_host');
-define('MSSQL_USER','mssql_user');
-define('MSSQL_PASSWORD','mssql_password');
-define('MSSQL_DATABASE','mssql_database');
+define('MSSQL_HOST','192.168.33.1');
+define('MSSQL_USER','SA');
+define('MSSQL_PASSWORD','<<CHANGE_ME>>');
+define('MSSQL_DATABASE','wt3datHS');
 
 /*
  * DESTINATION: MySQL
  */
-define('MYSQL_HOST', 'mysql_host');
-define('MYSQL_USER', 'mysql_user');
-define('MYSQL_PASSWORD','mysql_password');
-define('MYSQL_DATABASE','mysql_database');
+define('MYSQL_HOST', '127.0.0.1');
+define('MYSQL_USER', 'root');
+define('MYSQL_PASSWORD', '1234');
+define('MYSQL_DATABASE', 'hauser');
 
 /*
  * STOP EDITING!
@@ -36,7 +36,8 @@ $mssql_db = sqlsrv_connect(MSSQL_HOST, ['Uid' => MSSQL_USER, 'PWD' => MSSQL_PASS
 echo "=> Connected to Source MS SQL Server on '".MSSQL_HOST."'\n";
 
 // Connect to MySQL
-$mysqli = new mysqli(MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE) or die("Couldn't connect to MySQL on '".MYSQL_HOST."'' user '".MYSQL_USER."'\n");
+$mysqli = new mysqli(MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE) or
+die("Couldn't connect to MySQL on '".MYSQL_HOST."'' user '".MYSQL_USER."'\n");
 echo "\n=> Connected to Destination MySQL Server on ".MYSQL_HOST."\n";
 
 $mssql_tables = array();
@@ -59,12 +60,13 @@ if (!empty($mssql_tables))
 	foreach ($mssql_tables as $table)
 	{
 		echo '====> '.$i.'. '.$table."\n";
+
 		echo "=====> Getting info table ".$table." from SQL Server\n";
 
 		$sql = "select * from information_schema.columns where table_name = '".$table."'";
 		$res = sqlsrv_query($mssql_db, $sql);
 
-		if ($res) 
+		if ($res)
 		{
 			$mssql_tables[$table] = array();
 
@@ -86,15 +88,24 @@ if (!empty($mssql_tables))
 					case 'bigint':
 						$data_type = $row['DATA_TYPE'].(!empty($row['NUMERIC_PRECISION']) ? '('.$row['NUMERIC_PRECISION'].')' : '' );
 						break;
-					
+
 					case 'money':
 						$data_type = 'decimal(19,4)';
 						break;
 					case 'smallmoney':
 						$data_type = 'decimal(10,4)';
 						break;
-					
+
 					case 'real':
+                        $data_type =
+                            'float'.
+                            (!empty($row['NUMERIC_PRECISION']) ?
+                                '('.
+                                $row['NUMERIC_PRECISION'].
+                                (!empty($row['NUMERIC_SCALE']) ? ','.$row['NUMERIC_SCALE'] : '').
+                                ')' : '');
+                        break;
+
 					case 'float':
 					case 'decimal':
 					case 'numeric':
@@ -114,12 +125,15 @@ if (!empty($mssql_tables))
 
 					case 'nchar':
 					case 'char':
-						$data_type = 'char'.(!empty($row['CHARACTER_MAXIMUM_LENGTH']) && $row['CHARACTER_MAXIMUM_LENGTH'] > 0 ? '('.$row['CHARACTER_MAXIMUM_LENGTH'].')' : '(255)' );
-						break;
-					case 'nvarchar':
-					case 'varchar':
-						$data_type = 'varchar'.(!empty($row['CHARACTER_MAXIMUM_LENGTH']) && $row['CHARACTER_MAXIMUM_LENGTH'] > 0 ? '('.$row['CHARACTER_MAXIMUM_LENGTH'].')' : '(255)' );
-						break;
+                    case 'nvarchar':
+                    case 'varchar':
+					    $max = (int)$row['CHARACTER_MAXIMUM_LENGTH'];
+					    if (1 > $max || 255 < $max) {
+					        $data_type = 'text';
+                        } else {
+					        $data_type = (false !== strpos($row['DATA_TYPE'], 'var') ? 'var' : '').'char('.$max.')';
+                        }
+                        break;
 					case 'ntext':
 					case 'text':
 						$data_type = 'text';
@@ -149,24 +163,32 @@ if (!empty($mssql_tables))
 				if (!empty($data_type))
 				{
 					$ssql = "`".$row['COLUMN_NAME']."` ".$data_type." ".($row['IS_NULLABLE'] == 'YES' ? 'NULL' : 'NOT NULL');
+					if (preg_match('/(ID|Id|Nr)$/', $row['COLUMN_NAME'])) {
+					    $ssql .= ',INDEX `'.$row['COLUMN_NAME'].'` (`'.$row['COLUMN_NAME'].'`)';
+                    }
 					array_push($strctsql, $ssql);
-					array_push($fields, $row['COLUMN_NAME']);	
+					array_push($fields, $row['COLUMN_NAME']);
 				}
-				
+
 			}
 
-			$mysql .= "(".implode(',', $strctsql).") DEFAULT CHARACTER SET = 'utf8';";
-			echo "======> Creating table ".$table." on MySQL... ";
-			$q = $mysqli->query($mysql);
-			echo (($q) ? 'Success':'Failed!'."\n".$mysql."\n")."\n";
-			
 			echo "=====> Getting data from table ".$table." on SQL Server\n";
 			$sql = "SELECT * FROM ".$table;
 			$qres = sqlsrv_query($mssql_db, $sql, [], ['Scrollable' => 'static']);
 			$numrow = sqlsrv_num_rows($qres);
 			echo "======> Found ".number_format($numrow,0,',','.')." rows\n";
 
-			if ($qres)
+			if (0 === $numrow) {
+			    echo "Skipping.\n";
+			    continue;
+            }
+
+            $mysql .= "(".implode(',', $strctsql).") DEFAULT CHARACTER SET = 'utf8';";
+            echo "======> Creating table ".$table." on MySQL... ";
+            $q = $mysqli->query($mysql);
+            echo (($q) ? 'Success':'Failed!'."\n".$mysql."\n")."\n";
+
+            if ($qres)
 			{
 				echo "=====> Inserting to table ".$table." on MySQL\n";
 				$numdata = 0;
@@ -176,19 +198,19 @@ if (!empty($mssql_tables))
 					while ($qrow = sqlsrv_fetch_array($qres))
 					{
 						$datas = array();
-						foreach ($fields as $field) 
+						foreach ($fields as $field)
 						{
 							$ddata = (!empty($qrow[$field])) ? $qrow[$field] : '';
 							if ($ddata instanceof DateTimeInterface) {
 								$ddata = $ddata->format('c');
 							}
-							array_push($datas,"'".$mysqli->escape_string(utf8_decode($ddata))."'");
+							array_push($datas,"'".$mysqli->real_escape_string(utf8_decode($ddata))."'");
 						}
 
 						if (!empty($datas))
 						{
 							//$datas = array_map('addQuote', $datas);
-							//$fields = 
+							//$fields =
 							$mysql = "INSERT INTO `".$table."` (".implode(',',$sfield).") VALUES (".implode(',',$datas).");";
 							//$mysql = mysql_real_escape_string($mysql);
 							//echo $mysql."\n";
@@ -198,9 +220,12 @@ if (!empty($mssql_tables))
 					}
 				}
 				echo "======> ".number_format($numdata,0,',','.')." data inserted\n\n";
+
+				if (0 == $numdata) {
+				    $mysqli->query('DROP TABLE `'.$table.'`');
+                }
 			}
 		}
-		$i++;
 	}
 
 }
