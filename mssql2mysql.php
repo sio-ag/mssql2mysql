@@ -53,13 +53,63 @@ while ($row = sqlsrv_fetch_array($res))
 }
 echo "==> Found ". number_format(count($mssql_tables),0,',','.') ." tables\n\n";
 
+$blacklisted = [
+    'wv_Delegationen',
+    'wv_Delegationen_Hist',
+    'Datei_Historie',
+    'Itinerary',
+    'SR_EQ',
+    'PLZ',
+    'Buchungen_BuBeTexte',
+    'WV_System',
+    'TourInfo_DDSrc',
+    'BS_Archiv',
+    'BS_Umsatz',
+    'SR_Zimmer_Detail',
+    'BS_Umsatz_lfd',
+    'WV_System_Hist',
+    'Reiseteilnehmer_del',
+    'BSPaidProv',
+    'KFB_WEB',
+    'Buchhaltung_Prov',
+    'Rechnung_Text_ZB',
+    'SR_Kalk_Paxvariante',
+    'ZahlungenImp',
+    'Buchhaltung_FiBu',
+    'tblKalk',
+    'Adressen_deleted',
+    'Buchhaltung',
+    'BSPaidProv_gebucht',
+    'TextLeistungen',
+    'SR_Kalk_Preis_pro',
+    'KFB_logMails',
+    'KFB_Log',
+    'KFB_Job',
+    'SR_Publizieren',
+    'F_VK_Preise',
+    'WV_AutoHistorie',
+    'BerichtsLog',
+    'Adressen_Hist',
+    'Buchungssaetze_ProMain',
+    'Kontingente',
+    'KontingentTage',
+    'Personenkonten',
+    'SR_Tour_EQ',
+];
+
 // Get Table Structures
 if (!empty($mssql_tables))
 {
-	$i = 1;
+    $i = count($mssql_tables);
+
 	foreach ($mssql_tables as $table)
 	{
-		echo '====> '.$i.'. '.$table."\n";
+        echo '====> '.$i--.'. '.$table."\n";
+
+        if (in_array($table, $blacklisted)) {
+            echo "=====> BLACKLISTED\n\n";
+            continue;
+        }
 
 		echo "=====> Getting info table ".$table." from SQL Server\n";
 
@@ -179,7 +229,7 @@ if (!empty($mssql_tables))
 			echo "======> Found ".number_format($numrow,0,',','.')." rows\n";
 
 			if (0 === $numrow) {
-			    echo "Skipping.\n";
+                echo "=======> Skipping.\n\n";
 			    continue;
             }
 
