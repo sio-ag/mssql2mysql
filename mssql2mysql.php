@@ -87,7 +87,6 @@ $blacklisted = [
     'KFB_Job',
     'SR_Publizieren',
     'F_VK_Preise',
-    'WV_AutoHistorie',
     'BerichtsLog',
     'Adressen_Hist',
     'Buchungssaetze_ProMain',
